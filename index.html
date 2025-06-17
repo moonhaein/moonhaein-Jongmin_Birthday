@@ -1,25 +1,197 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>종민형생축</title>
-  <link rel="stylesheet" href="style_board.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>게시판 목록</title>
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header>
-    <h1 class="clickable" onclick="location.href='index.html'">종민형 생일</h1>
+    <div id="logo" onclick="location.href='index.html'">MyBoard Logo</div>
+    <button id="login-btn" onclick="location.href='login.html'">로그인</button>
   </header>
 
-  <main class="main-container">
-    <div class="board-header">
-      <h2>자유게시판</h2>
-      <button class="clickable" onclick="location.href='write.html'">글쓰기</button>
-    </div>
-    <ul id="postList" class="post-list"></ul>
-    <div id="pagination"></div>
+  <main>
+    <section class="board-container">
+      <h1>자유게시판</h1>
+      <button id="write-btn" onclick="checkLoginAndWrite()">글쓰기</button>
+      <div id="loading">게시글을 불러오는 중...</div>
+      <ul id="post-list"></ul>
+      <div id="pagination"></div>
+    </section>
   </main>
 
-  <footer><p>© 2025 종민형의 생일</p></footer>
-  <script src="board.js"></script>
+  <footer>
+    &copy; 2025 MyBoard. All rights reserved.
+  </footer>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, getDocs, orderBy, query, limit, startAfter } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // Firebase 설정 (여기에 본인의 Firebase 설정을 넣으세요)
+    const firebaseConfig = {
+      // 여기에 Firebase 프로젝트 설정을 넣으세요
+      apiKey: "AIzaSyB9Yn1J6SIVYmTesoLGyA5bTlUTsrpEc6s",
+      authDomain: "jominbirthday.firebaseapp.com",
+      projectId: "jominbirthday",
+      storageBucket: "jominbirthday.firebasestorage.app",
+      messagingSenderId: "666432978269",
+      appId: "1:666432978269:web:ae9b52305ceb28791d7cb4",
+      measurementId: "G-DYWDD0BC5R"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let currentPage = 1;
+    const postsPerPage = 10;
+    let lastVisible = null;
+    let allPosts = [];
+
+    // 로그인 상태 확인
+    function checkLogin() {
+      return localStorage.getItem('isLoggedIn') === 'true';
+    }
+
+    // 로그인 버튼 상태 업데이트
+    function updateLoginButton() {
+      const loginBtn = document.getElementById('login-btn');
+      if (checkLogin()) {
+        loginBtn.textContent = '로그아웃';
+        loginBtn.onclick = logout;
+      } else {
+        loginBtn.textContent = '로그인';
+        loginBtn.onclick = () => location.href = 'login.html';
+      }
+    }
+
+    // 로그아웃
+    function logout() {
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('username');
+      updateLoginButton();
+      alert('로그아웃되었습니다.');
+    }
+
+    // 글쓰기 전 로그인 확인
+    window.checkLoginAndWrite = function() {
+      if (!checkLogin()) {
+        alert('로그인이 필요합니다.');
+        location.href = 'login.html';
+        return;
+      }
+      location.href = 'write.html';
+    };
+
+    // 게시글 목록 불러오기
+    async function loadPosts() {
+      try {
+        const loading = document.getElementById('loading');
+        loading.style.display = 'block';
+
+        const postsRef = collection(db, 'posts');
+        const q = query(postsRef, orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        allPosts = [];
+        querySnapshot.forEach((doc) => {
+          allPosts.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+
+        loading.style.display = 'none';
+        displayPosts();
+        setupPagination();
+      } catch (error) {
+        console.error('게시글을 불러오는데 실패했습니다:', error);
+        document.getElementById('loading').textContent = '게시글을 불러오는데 실패했습니다.';
+      }
+    }
+
+    // 게시글 표시
+    function displayPosts() {
+      const postList = document.getElementById('post-list');
+      postList.innerHTML = '';
+
+      const startIndex = (currentPage - 1) * postsPerPage;
+      const endIndex = startIndex + postsPerPage;
+      const postsToShow = allPosts.slice(startIndex, endIndex);
+
+      if (postsToShow.length === 0) {
+        postList.innerHTML = '<li style="text-align: center; color: #666;">게시글이 없습니다.</li>';
+        return;
+      }
+
+      postsToShow.forEach(post => {
+        const li = document.createElement('li');
+        li.className = 'post-item';
+        
+        const date = post.createdAt ? new Date(post.createdAt.seconds * 1000).toLocaleDateString('ko-KR') : '날짜 없음';
+        
+        li.innerHTML = `
+          <div class="post-title">${post.title}</div>
+          <div class="post-meta">작성자: ${post.author} | 작성일: ${date}</div>
+        `;
+        
+        li.onclick = () => {
+          location.href = `post.html?id=${post.id}`;
+        };
+        
+        postList.appendChild(li);
+      });
+    }
+
+    // 페이지네이션 설정
+    function setupPagination() {
+      const pagination = document.getElementById('pagination');
+      const totalPages = Math.ceil(allPosts.length / postsPerPage);
+      
+      if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+      }
+
+      let paginationHTML = '';
+      
+      // 이전 버튼
+      if (currentPage > 1) {
+        paginationHTML += `<button onclick="changePage(${currentPage - 1})">이전</button>`;
+      }
+      
+      // 페이지 번호들
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === currentPage) {
+          paginationHTML += `<button class="active">${i}</button>`;
+        } else {
+          paginationHTML += `<button onclick="changePage(${i})">${i}</button>`;
+        }
+      }
+      
+      // 다음 버튼
+      if (currentPage < totalPages) {
+        paginationHTML += `<button onclick="changePage(${currentPage + 1})">다음</button>`;
+      }
+      
+      pagination.innerHTML = paginationHTML;
+    }
+
+    // 페이지 변경
+    window.changePage = function(page) {
+      currentPage = page;
+      displayPosts();
+      setupPagination();
+    };
+
+    // 페이지 로드 시 실행
+    document.addEventListener('DOMContentLoaded', function() {
+      updateLoginButton();
+      loadPosts();
+    });
+  </script>
 </body>
 </html>

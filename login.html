@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>로그인</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <div id="logo" onclick="location.href='index.html'">MyBoard Logo</div>
+  </header>
+
+  <main>
+    <section class="login-container">
+      <h1>로그인</h1>
+      <div class="login-form">
+        <input type="text" id="username" placeholder="사용할 닉네임을 입력하세요" maxlength="20" />
+        <button id="anon-login-btn">익명 로그인</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    &copy; 2025 MyBoard. All rights reserved.
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const usernameInput = document.getElementById('username');
+      const loginBtn = document.getElementById('anon-login-btn');
+
+      // 이미 로그인된 경우 메인 페이지로 리다이렉트
+      if (localStorage.getItem('isLoggedIn') === 'true') {
+        location.href = 'index.html';
+        return;
+      }
+
+      // 랜덤 닉네임 생성
+      function generateRandomNickname() {
+        const adjectives = ['멋진', '귀여운', '똑똑한', '재미있는', '친절한', '활발한', '조용한', '신비한'];
+        const nouns = ['고양이', '강아지', '토끼', '곰돌이', '여우', '사자', '호랑이', '판다'];
+        const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+        const randomNum = Math.floor(Math.random() * 1000);
+        return `${randomAdj}${randomNoun}${randomNum}`;
+      }
+
+      // 페이지 로드 시 랜덤 닉네임 설정
+      usernameInput.value = generateRandomNickname();
+
+      // 엔터 키로 로그인
+      usernameInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+          performLogin();
+        }
+      });
+
+      // 로그인 버튼 클릭
+      loginBtn.addEventListener('click', performLogin);
+
+      function performLogin() {
+        const username = usernameInput.value.trim();
+        
+        if (!username) {
+          alert('닉네임을 입력해주세요.');
+          usernameInput.focus();
+          return;
+        }
+
+        if (username.length < 2) {
+          alert('닉네임은 2글자 이상 입력해주세요.');
+          usernameInput.focus();
+          return;
+        }
+
+        // 로그인 정보 저장
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('username', username);
+        
+        alert(`${username}님, 환영합니다!`);
+        location.href = 'index.html';
+      }
+    });
+  </script>
+</body>
+</html>

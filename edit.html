@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>게시글 수정</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <div id="logo" onclick="location.href='index.html'">MyBoard Logo</div>
+    <button id="login-btn">로그아웃</button>
+  </header>
+
+  <main>
+    <section class="write-container">
+      <h1>게시글 수정</h1>
+      <div id="loading">게시글을 불러오는 중...</div>
+      <form id="edit-form" style="display: none;">
+        <input type="text" id="edit-title" placeholder="제목을 입력하세요" required maxlength="100" />
+        <textarea id="edit-content" placeholder="내용을 입력하세요" required rows="15"></textarea>
+        <div class="button-group">
+          <button type="button" id="cancel-btn">취소</button>
+          <button type="submit" id="save-btn">수정 완료</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "your-api-key",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project-id",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "your-app-id"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let postId = null;
+    let originalPost = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      postId = urlParams.get('id');
+
+      if (!postId) {
+        alert('잘못된 접근입니다.');
+        location.href = 'index.html';
+        return;
+      }
+
+      if (localStorage.getItem('isLoggedIn') !== 'true') {
+        alert('로그인이 필요합니다.');
+        location.href = 'login.html';
+        return;
+      }
+
+      const loginBtn = document.getElementById('login-btn');
+      loginBtn.onclick = function() {
+        if (confirm('로그아웃하시겠습니까? 수정 중인 내용이 사라집니다.')) {
+          localStorage.removeItem('isLoggedIn');
+          localStorage.removeItem('username');
+          location.href = 'index.html';
+        }
+      };
+
+      loadPost();
+      setupForm();
+    });
+
+    async function loadPost() {
+      try {
+        const docRef = doc(db, 'posts', postId);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          alert('게시글을 찾을 수 없습니다.');
+          location.href = 'index.html';
+          return;
+        }
+
+        originalPost = { id: docSnap.id, ...docSnap.data() };
+        const currentUser = localStorage.getItem('username');
+
+        if (currentUser !== originalPost.author) {
+          alert('수정 권한이 없습니다.');
+          location.href = `post.html?id=${postId}`;
+          return;
+        }
+
+        document.getElementById('edit-title').value = originalPost.title;
+        document.getElementById('edit-content').value = originalPost.content;
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('edit-form').style.display = 'block';
+      } catch (error) {
+        console.error('게시글을 불러오는데 실패했습니다:', error);
+        alert('게시글을 불러오는데 실패했습니다.');
+        location.href = 'index.html';
+      }
+    }
+
+    function setupForm() {
+      const form = document.getElementById('edit-form');
+      const saveBtn = document.getElementById('save-btn');
+      const cancelBtn = document.getElementById('cancel-btn');
+
+      cancelBtn.onclick = function() {
+        if (confirm('수정을 취소하시겠습니까?')) {
+          location.href = `post.html?id=${postId}`;
+        }
+      };
+
+      form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const title = document.getElementById('edit-title').value.trim();
+        const content = document.getElementById('edit-content').value.trim();
+
+        if (!title || !content) {
+          alert('제목과 내용을 모두 입력해주세요.');
+          return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = '수정 중...';
+
+        try {
+          const docRef = doc(db, 'posts', postId);
+          await updateDoc(docRef, {
+            title: title,
+            content: content
+          });
+
+          alert('게시글이 수정되었습니다.');
+          location.href = `post.html?id=${postId}`;
+        } catch (error) {
+          console.error('게시글 수정 실패:', error);
+          alert('게시글 수정에 실패했습니다. 다시 시도해주세요.');
+          
+          saveBtn.disabled = false;
+          saveBtn.textContent = '수정 완료';
+        }
+      });
+
+      window.addEventListener('beforeunload', function(event) {
+        const title = document.getElementById('edit-title').value.trim();
+        const content = document.getElementById('edit-content').value.trim();
+        
+        if (originalPost && (title !== originalPost.title || content !== originalPost.content)) {
+          event.preventDefault();
+          event.returnValue = '수정 중인 내용이 있습니다. 정말 나가시겠습니까?';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

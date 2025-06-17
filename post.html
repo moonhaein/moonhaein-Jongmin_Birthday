@@ -1,32 +1,283 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>게시글 보기</title>
-  <link rel="stylesheet" href="style_board.css">
+  <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <header>
-    <h1 class="clickable" onclick="location.href='index.html'">종민형 생일</h1>
+    <div id="logo" onclick="location.href='index.html'">MyBoard Logo</div>
+    <button id="login-btn">로그인</button>
   </header>
 
-  <main class="main-container">
-    <div id="postDetail"></div>
+  <main>
+    <div id="loading">게시글을 불러오는 중...</div>
+    <div id="post-container" style="display: none;">
+      <div id="post-content">
+        <div id="post-header">
+          <h1 id="post-title"></h1>
+          <div id="post-meta"></div>
+        </div>
+        <div id="post-body"></div>
+      </div>
+      
+      <div id="post-controls">
+        <button onclick="location.href='index.html'">목록으로</button>
+        <div id="author-controls"></div>
+      </div>
 
-<div class="like-dislike">
-  <button id="likeBtn" class="clickable" onclick="vote('like')">👍 좋아요 (<span id="likeCount">0</span>)</button>
-  <button id="dislikeBtn" class="clickable" onclick="vote('dislike')">👎 싫어요 (<span id="dislikeCount">0</span>)</button>
-</div>
-
-<button id="deleteBtn" class="clickable" style="margin-top: 15px; background-color: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px;" onclick="deletePost()">삭제</button>
-
-    <h3>댓글</h3>
-    <input type="text" id="commentInput" placeholder="댓글 입력" style="width:80%;">
-    <button class="clickable" onclick="addComment()">등록</button>
-    <ul id="commentList" class="post-list"></ul>
+      <div id="comment-section">
+        <h3>댓글</h3>
+        <div id="comment-input-area">
+          <textarea id="comment-input" placeholder="댓글을 입력하세요..." rows="3"></textarea>
+          <button id="comment-submit">댓글 등록</button>
+        </div>
+        <ul id="comment-list"></ul>
+      </div>
+    </div>
   </main>
 
-  <footer><p>© 2025 내 홈페이지</p></footer>
-  <script src="post.js"></script>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, doc, getDoc, updateDoc, deleteDoc, arrayUnion, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // Firebase 설정 (동일하게 설정)
+    const firebaseConfig = {
+      // 여기에 Firebase 프로젝트 설정을 넣으세요
+      apiKey: "your-api-key",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project-id",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "your-app-id"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let currentPost = null;
+    let postId = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // URL에서 게시글 ID 가져오기
+      const urlParams = new URLSearchParams(window.location.search);
+      postId = urlParams.get('id');
+
+      if (!postId) {
+        alert('잘못된 접근입니다.');
+        location.href = 'index.html';
+        return;
+      }
+
+      updateLoginButton();
+      loadPost();
+      setupCommentSubmit();
+    });
+
+    // 로그인 상태 확인 및 버튼 업데이트
+    function updateLoginButton() {
+      const loginBtn = document.getElementById('login-btn');
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      
+      if (isLoggedIn) {
+        loginBtn.textContent = '로그아웃';
+        loginBtn.onclick = logout;
+      } else {
+        loginBtn.textContent = '로그인';
+        loginBtn.onclick = () => location.href = 'login.html';
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('isLoggedIn');
+      localStorage.removeItem('username');
+      updateLoginButton();
+      location.reload(); // 페이지 새로고침하여 댓글 입력란 숨기기
+    }
+
+    // 게시글 불러오기
+    async function loadPost() {
+      try {
+        const docRef = doc(db, 'posts', postId);
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          alert('게시글을 찾을 수 없습니다.');
+          location.href = 'index.html';
+          return;
+        }
+
+        currentPost = { id: docSnap.id, ...docSnap.data() };
+        
+        // 조회수 증가
+        await updateDoc(docRef, {
+          views: (currentPost.views || 0) + 1
+        });
+
+        displayPost();
+        displayComments();
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('post-container').style.display = 'block';
+      } catch (error) {
+        console.error('게시글을 불러오는데 실패했습니다:', error);
+        alert('게시글을 불러오는데 실패했습니다.');
+        location.href = 'index.html';
+      }
+    }
+
+    // 게시글 표시
+    function displayPost() {
+      const title = document.getElementById('post-title');
+      const meta = document.getElementById('post-meta');
+      const body = document.getElementById('post-body');
+      const authorControls = document.getElementById('author-controls');
+
+      title.textContent = currentPost.title;
+      
+      const createdAt = currentPost.createdAt ? 
+        new Date(currentPost.createdAt.seconds * 1000).toLocaleString('ko-KR') : 
+        '날짜 없음';
+      
+      meta.innerHTML = `
+        <span>작성자: ${currentPost.author}</span>
+        <span>작성일: ${createdAt}</span>
+        <span>조회수: ${(currentPost.views || 0) + 1}</span>
+      `;
+
+      body.innerHTML = currentPost.content.replace(/\n/g, '<br>');
+
+      // 작성자만 수정/삭제 버튼 표시
+      const currentUser = localStorage.getItem('username');
+      if (currentUser === currentPost.author) {
+        authorControls.innerHTML = `
+          <button onclick="editPost()">수정</button>
+          <button onclick="deletePost()" class="delete-btn">삭제</button>
+        `;
+      }
+    }
+
+    // 댓글 표시
+    function displayComments() {
+      const commentList = document.getElementById('comment-list');
+      const comments = currentPost.comments || [];
+      
+      if (comments.length === 0) {
+        commentList.innerHTML = '<li class="no-comments">아직 댓글이 없습니다.</li>';
+        return;
+      }
+
+      commentList.innerHTML = '';
+      comments.forEach((comment, index) => {
+        const li = document.createElement('li');
+        li.className = 'comment-item';
+        
+        const commentDate = comment.createdAt ? 
+          new Date(comment.createdAt.seconds * 1000).toLocaleString('ko-KR') : 
+          '날짜 없음';
+        
+        li.innerHTML = `
+          <div class="comment-author">${comment.author}</div>
+          <div class="comment-content">${comment.content.replace(/\n/g, '<br>')}</div>
+          <div class="comment-date">${commentDate}</div>
+        `;
+        
+        commentList.appendChild(li);
+      });
+    }
+
+    // 댓글 제출 설정
+    function setupCommentSubmit() {
+      const commentInput = document.getElementById('comment-input');
+      const commentSubmit = document.getElementById('comment-submit');
+      const commentInputArea = document.getElementById('comment-input-area');
+
+      // 로그인 상태에 따라 댓글 입력란 표시/숨김
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      if (!isLoggedIn) {
+        commentInputArea.style.display = 'none';
+        return;
+      }
+
+      commentSubmit.addEventListener('click', submitComment);
+      
+      commentInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          submitComment();
+        }
+      });
+    }
+
+    // 댓글 제출
+    async function submitComment() {
+      const commentInput = document.getElementById('comment-input');
+      const commentSubmit = document.getElementById('comment-submit');
+      const content = commentInput.value.trim();
+      
+      if (!content) {
+        alert('댓글 내용을 입력해주세요.');
+        return;
+      }
+
+      const username = localStorage.getItem('username');
+      if (!username) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      commentSubmit.disabled = true;
+      commentSubmit.textContent = '등록 중...';
+
+      try {
+        const docRef = doc(db, 'posts', postId);
+        const newComment = {
+          author: username,
+          content: content,
+          createdAt: serverTimestamp()
+        };
+
+        await updateDoc(docRef, {
+          comments: arrayUnion(newComment)
+        });
+
+        commentInput.value = '';
+        
+        // 게시글 다시 불러오기
+        await loadPost();
+        
+        alert('댓글이 등록되었습니다.');
+      } catch (error) {
+        console.error('댓글 등록 실패:', error);
+        alert('댓글 등록에 실패했습니다.');
+      } finally {
+        commentSubmit.disabled = false;
+        commentSubmit.textContent = '댓글 등록';
+      }
+    }
+
+    // 게시글 수정
+    window.editPost = function() {
+      location.href = `edit.html?id=${postId}`;
+    };
+
+    // 게시글 삭제
+    window.deletePost = async function() {
+      if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
+        return;
+      }
+
+      try {
+        await deleteDoc(doc(db, 'posts', postId));
+        alert('게시글이 삭제되었습니다.');
+        location.href = 'index.html';
+      } catch (error) {
+        console.error('게시글 삭제 실패:', error);
+        alert('게시글 삭제에 실패했습니다.');
+      }
+    };
+  </script>
 </body>
 </html>
