@@ -52,18 +52,18 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-    // Firebase 설정 (올바른 설정으로 수정)
+    // Firebase 설정
     const firebaseConfig = {
-  apiKey: "AIzaSyAdkPdY2zegu26BS0q9LFVzNRemtu6WHgI",
-  authDomain: "jominbirthday-82862.firebaseapp.com",
-  projectId: "jominbirthday-82862",
-  storageBucket: "jominbirthday-82862.firebasestorage.app",
-  messagingSenderId: "109861443515",
-  appId: "1:109861443515:web:008f42d07b241211a2569e",
-  measurementId: "G-53L1BN0XFX"
-};
+      apiKey: "AIzaSyAdkPdY2zegu26BS0q9LFVzNRemtu6WHgI",
+      authDomain: "jominbirthday-82862.firebaseapp.com",
+      projectId: "jominbirthday-82862",
+      storageBucket: "jominbirthday-82862.firebasestorage.app",
+      messagingSenderId: "109861443515",
+      appId: "1:109861443515:web:008f42d07b241211a2569e",
+      measurementId: "G-53L1BN0XFX"
+    };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -295,9 +295,15 @@
         const li = document.createElement('li');
         li.className = 'comment-item';
         
-        const commentDate = comment.createdAt ? 
-          new Date(comment.createdAt.seconds * 1000).toLocaleString('ko-KR') : 
-          '날짜 없음';
+        // 댓글 날짜 처리 - createdAt이 문자열인 경우와 Timestamp 객체인 경우 모두 처리
+        let commentDate = '날짜 없음';
+        if (comment.createdAt) {
+          if (typeof comment.createdAt === 'string') {
+            commentDate = new Date(comment.createdAt).toLocaleString('ko-KR');
+          } else if (comment.createdAt.seconds) {
+            commentDate = new Date(comment.createdAt.seconds * 1000).toLocaleString('ko-KR');
+          }
+        }
         
         li.innerHTML = `
           <div class="comment-author">${comment.author}</div>
@@ -332,7 +338,7 @@
       });
     }
 
-    // 댓글 제출
+    // 댓글 제출 - serverTimestamp 대신 일반 Date 객체 사용
     async function submitComment() {
       const commentInput = document.getElementById('comment-input');
       const commentSubmit = document.getElementById('comment-submit');
@@ -354,14 +360,20 @@
 
       try {
         const docRef = doc(db, 'posts', postId);
+        
+        // serverTimestamp 대신 현재 시간을 ISO 문자열로 저장
         const newComment = {
           author: username,
           content: content,
-          createdAt: serverTimestamp()
+          createdAt: new Date().toISOString()
         };
 
+        // 현재 댓글 배열을 가져와서 새 댓글 추가
+        const currentComments = currentPost.comments || [];
+        const updatedComments = [...currentComments, newComment];
+
         await updateDoc(docRef, {
-          comments: arrayUnion(newComment)
+          comments: updatedComments
         });
 
         commentInput.value = '';
@@ -372,7 +384,7 @@
         alert('댓글이 등록되었습니다.');
       } catch (error) {
         console.error('댓글 등록 실패:', error);
-        alert('댓글 등록에 실패했습니다.');
+        alert('댓글 등록에 실패했습니다. 다시 시도해주세요.');
       } finally {
         commentSubmit.disabled = false;
         commentSubmit.textContent = '댓글 등록';
