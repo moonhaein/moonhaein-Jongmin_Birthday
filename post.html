@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>게시글 보기</title>
+  <link rel="stylesheet" href="style_board.css">
+</head>
+<body>
+  <header>
+    <h1 class="clickable" onclick="location.href='index.html'">종민형 생일</h1>
+  </header>
+
+  <main class="main-container">
+    <div id="postDetail"></div>
+
+<div class="like-dislike">
+  <button id="likeBtn" class="clickable" onclick="vote('like')">👍 좋아요 (<span id="likeCount">0</span>)</button>
+  <button id="dislikeBtn" class="clickable" onclick="vote('dislike')">👎 싫어요 (<span id="dislikeCount">0</span>)</button>
+</div>
+
+<button id="deleteBtn" class="clickable" style="margin-top: 15px; background-color: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px;" onclick="deletePost()">삭제</button>
+
+    <h3>댓글</h3>
+    <input type="text" id="commentInput" placeholder="댓글 입력" style="width:80%;">
+    <button class="clickable" onclick="addComment()">등록</button>
+    <ul id="commentList" class="post-list"></ul>
+  </main>
+
+  <footer><p>© 2025 내 홈페이지</p></footer>
+  <script src="post.js"></script>
+</body>
+</html>

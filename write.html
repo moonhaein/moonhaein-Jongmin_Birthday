@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>글쓰기</title>
+  <link rel="stylesheet" href="style_board.css">
+</head>
+<body>
+  <header>
+    <h1 class="clickable" onclick="location.href='index.html'">종민형 생일</h1>
+  </header>
+
+  <main class="main-container">
+    <h2>글쓰기</h2>
+    <input type="text" id="title" placeholder="제목" style="width:100%;"><br><br>
+    <textarea id="content" placeholder="내용" rows="10" style="width:100%;"></textarea><br><br>
+    <button class="clickable" onclick="savePost()">등록</button>
+  </main>
+
+  <script>
+    function savePost() {
+      const title = document.getElementById("title").value.trim();
+      const content = document.getElementById("content").value.trim();
+      if (!title || !content) return alert("제목과 내용을 입력해주세요");
+
+      const posts = JSON.parse(localStorage.getItem("posts") || "[]");
+
+      const post = {
+        id: Date.now(),
+        title,
+        content,
+        author: "나",
+        date: new Date().toLocaleString(),
+        likes: 0,
+        dislikes: 0,
+        comments: []
+      };
+
+      posts.unshift(post);
+      localStorage.setItem("posts", JSON.stringify(posts));
+      location.href = "index.html";
+    }
+  </script>
+</body>
+</html>
