@@ -27,6 +27,17 @@
         <div id="author-controls"></div>
       </div>
 
+      <div id="like-section">
+        <button id="like-btn" class="like-btn">
+          <span class="like-icon">👍</span>
+          <span id="like-count">0</span>
+        </button>
+        <button id="dislike-btn" class="like-btn">
+          <span class="like-icon">👎</span>
+          <span id="dislike-count">0</span>
+        </button>
+      </div>
+
       <div id="comment-section">
         <h3>댓글</h3>
         <div id="comment-input-area">
@@ -41,9 +52,9 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, doc, getDoc, updateDoc, deleteDoc, arrayUnion, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-    // Firebase 설정 (동일하게 설정)
+    // Firebase 설정 (올바른 설정으로 수정)
     const firebaseConfig = {
   apiKey: "AIzaSyAdkPdY2zegu26BS0q9LFVzNRemtu6WHgI",
   authDomain: "jominbirthday-82862.firebaseapp.com",
@@ -59,6 +70,7 @@
 
     let currentPost = null;
     let postId = null;
+    let currentUser = null;
 
     document.addEventListener('DOMContentLoaded', function() {
       // URL에서 게시글 ID 가져오기
@@ -71,9 +83,11 @@
         return;
       }
 
+      currentUser = localStorage.getItem('username');
       updateLoginButton();
       loadPost();
       setupCommentSubmit();
+      setupLikeButtons();
     });
 
     // 로그인 상태 확인 및 버튼 업데이트
@@ -93,8 +107,9 @@
     function logout() {
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('username');
+      currentUser = null;
       updateLoginButton();
-      location.reload(); // 페이지 새로고침하여 댓글 입력란 숨기기
+      location.reload(); // 페이지 새로고침하여 상태 갱신
     }
 
     // 게시글 불러오기
@@ -117,6 +132,7 @@
         });
 
         displayPost();
+        displayLikes();
         displayComments();
         
         document.getElementById('loading').style.display = 'none';
@@ -150,12 +166,117 @@
       body.innerHTML = currentPost.content.replace(/\n/g, '<br>');
 
       // 작성자만 수정/삭제 버튼 표시
-      const currentUser = localStorage.getItem('username');
       if (currentUser === currentPost.author) {
         authorControls.innerHTML = `
           <button onclick="editPost()">수정</button>
           <button onclick="deletePost()" class="delete-btn">삭제</button>
         `;
+      }
+    }
+
+    // 좋아요/싫어요 표시
+    function displayLikes() {
+      const likeCount = document.getElementById('like-count');
+      const dislikeCount = document.getElementById('dislike-count');
+      const likeBtn = document.getElementById('like-btn');
+      const dislikeBtn = document.getElementById('dislike-btn');
+
+      const likes = currentPost.likes || [];
+      const dislikes = currentPost.dislikes || [];
+
+      likeCount.textContent = likes.length;
+      dislikeCount.textContent = dislikes.length;
+
+      // 현재 사용자의 좋아요/싫어요 상태 표시
+      if (currentUser) {
+        const userLiked = likes.includes(currentUser);
+        const userDisliked = dislikes.includes(currentUser);
+
+        likeBtn.classList.toggle('active', userLiked);
+        dislikeBtn.classList.toggle('active', userDisliked);
+      } else {
+        likeBtn.classList.remove('active');
+        dislikeBtn.classList.remove('active');
+      }
+
+      // 로그인하지 않은 경우 버튼 비활성화
+      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+      likeBtn.disabled = !isLoggedIn;
+      dislikeBtn.disabled = !isLoggedIn;
+
+      if (!isLoggedIn) {
+        likeBtn.title = '로그인이 필요합니다';
+        dislikeBtn.title = '로그인이 필요합니다';
+      } else {
+        likeBtn.title = '';
+        dislikeBtn.title = '';
+      }
+    }
+
+    // 좋아요/싫어요 버튼 설정
+    function setupLikeButtons() {
+      const likeBtn = document.getElementById('like-btn');
+      const dislikeBtn = document.getElementById('dislike-btn');
+
+      likeBtn.addEventListener('click', () => handleLike(true));
+      dislikeBtn.addEventListener('click', () => handleLike(false));
+    }
+
+    // 좋아요/싫어요 처리
+    async function handleLike(isLike) {
+      if (!currentUser) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+
+      try {
+        const docRef = doc(db, 'posts', postId);
+        const likes = currentPost.likes || [];
+        const dislikes = currentPost.dislikes || [];
+
+        const userLiked = likes.includes(currentUser);
+        const userDisliked = dislikes.includes(currentUser);
+
+        let updateData = {};
+
+        if (isLike) {
+          // 좋아요 버튼 클릭
+          if (userLiked) {
+            // 이미 좋아요 상태면 좋아요 취소
+            updateData.likes = arrayRemove(currentUser);
+          } else {
+            // 좋아요 추가
+            updateData.likes = arrayUnion(currentUser);
+            // 싫어요가 있다면 제거
+            if (userDisliked) {
+              updateData.dislikes = arrayRemove(currentUser);
+            }
+          }
+        } else {
+          // 싫어요 버튼 클릭
+          if (userDisliked) {
+            // 이미 싫어요 상태면 싫어요 취소
+            updateData.dislikes = arrayRemove(currentUser);
+          } else {
+            // 싫어요 추가
+            updateData.dislikes = arrayUnion(currentUser);
+            // 좋아요가 있다면 제거
+            if (userLiked) {
+              updateData.likes = arrayRemove(currentUser);
+            }
+          }
+        }
+
+        await updateDoc(docRef, updateData);
+
+        // 게시글 데이터 다시 불러오기
+        const updatedDocSnap = await getDoc(docRef);
+        currentPost = { id: updatedDocSnap.id, ...updatedDocSnap.data() };
+        displayLikes();
+
+      } catch (error) {
+        console.error('좋아요/싫어요 처리 실패:', error);
+        alert('처리 중 오류가 발생했습니다.');
       }
     }
 
